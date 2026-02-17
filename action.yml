@@ -112,9 +112,7 @@ runs:
       id: lint-annotations
       shell: bash
       run: |
-        REPORT_FILE="$GITHUB_WORKSPACE/spectral.json"
-
-        args=( spectral-report "${{ inputs.openapi_path }}" $REPORT_FILE )
+        args=( spectral-report "${{ inputs.openapi_path }}" spectral.json )
         
         # optional ruleset
         if [ -n "${{ inputs.ruleset }}" ]; then
@@ -122,8 +120,10 @@ runs:
         fi
         
         CMD=( docker run --rm \
-               -v "$GITHUB_WORKSPACE":/work:ro \
+               -v "$GITHUB_WORKSPACE":/work \
                dshanley/vacuum "${args[@]}" )
+
+        REPORT_FILE="$GITHUB_WORKSPACE/spectral.json"
         
         echo "Running: ${CMD[*]}"
         $("${CMD[@]}")
