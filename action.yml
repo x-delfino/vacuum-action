@@ -28,6 +28,10 @@ inputs:
     description: "Print the markdown report out to runner logs (defaults to 'true')"
     required: false
     default: "true"
+  write_annotations:
+    description: "Write GitHub annotations for identified issues"
+    required: false
+    default: "false"
 
 
 runs:
@@ -102,6 +106,45 @@ runs:
         body-path: ${{ steps.lint.outputs.report_path }}
         edit-mode: replace
 
+
+    - name: Lint OpenAPI specification using vacuum for annotations
+      if: ${{ inputs.write_annotations == 'true' }}
+      id: lint-annotations
+      shell: bash
+      run: |
+        args=( spectral-report "${{ inputs.openapi_path }}" spectral.json )
+        
+        # optional ruleset
+        if [ -n "${{ inputs.ruleset }}" ]; then
+          args+=( --ruleset "${{ inputs.ruleset }}" )
+        fi
+        
+        CMD=( docker run --rm \
+               -v "$GITHUB_WORKSPACE":/work \
+               dshanley/vacuum "${args[@]}" )
+
+        REPORT_FILE="$GITHUB_WORKSPACE/spectral.json"
+        
+        echo "Running: ${CMD[*]}"
+        "${CMD[@]}"
+        echo "report_path=$REPORT_FILE" >> "$GITHUB_OUTPUT"
+
+      env:
+        DOCKER_BUILDKIT: 1
+
+    - name: Create annotations
+      if: ${{ inputs.write_annotations == 'true' }}
+      shell: bash
+      run: |
+        jq -r '
+          .[] |
+          "::\(
+            if .severity == 0 then "error"
+            elif .severity == 1 then "warning"
+            else "notice"
+            end
+          ) file=\(.source),line=\(.range.start.line),col=\(.range.start.character),endLine=\(.range.end.line),endColumn=\(.range.end.character),title=\(.code)::\(.message)"
+        ' "${{ steps.lint-annotations.outputs.report_path }}"
 
 
 
